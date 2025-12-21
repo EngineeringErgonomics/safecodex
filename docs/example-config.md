@@ -100,6 +100,19 @@ exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
 
 ################################################################################
+# Exec policy (forbid commands even in --yolo mode)
+################################################################################
+
+[exec_policy]
+# Explicit token prefixes (preferred)
+forbidden_prefixes = [
+  ["rm", "-rf"],
+  ["git", "push"],
+]
+# Convenience strings (shlex-split into tokens)
+# forbidden_commands = ["rm -rf /tmp"]
+
+################################################################################
 # Shell Environment Policy for spawned processes
 ################################################################################
 

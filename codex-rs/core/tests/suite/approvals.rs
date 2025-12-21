@@ -105,7 +105,7 @@ impl ActionKind {
                 let (path, _) = target.resolve_for_patch(test);
                 let _ = fs::remove_file(&path);
                 let command = format!("printf {content:?} > {path:?} && cat {path:?}");
-                let event = shell_event(call_id, &command, 1_000, sandbox_permissions)?;
+                let event = shell_event(call_id, &command, 1_000, sandbox_permissions, None)?;
                 Ok((event, Some(command)))
             }
             ActionKind::FetchUrl {
@@ -123,15 +123,16 @@ impl ActionKind {
                 let url = format!("{}{}", server.uri(), endpoint);
                 let escaped_url = url.replace('\'', "\\'");
                 let script = format!(
-                    "import sys\nimport urllib.request\nurl = '{escaped_url}'\ntry:\n    data = urllib.request.urlopen(url, timeout=2).read().decode()\n    print('OK:' + data.strip())\nexcept Exception as exc:\n    print('ERR:' + exc.__class__.__name__)\n    sys.exit(1)",
+                    "import os\nimport sys\nimport time\nimport urllib.request\nos.environ.setdefault('NO_PROXY', '127.0.0.1,localhost')\nos.environ.setdefault('no_proxy', '127.0.0.1,localhost')\nfor key in ('HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy'):\n    os.environ.pop(key, None)\nurl = '{escaped_url}'\nlast_exc = None\nfor attempt in range(5):\n    try:\n        data = urllib.request.urlopen(url, timeout=5).read().decode()\n        print('OK:' + data.strip())\n        sys.exit(0)\n    except Exception as exc:\n        last_exc = exc\n        if attempt < 4:\n            time.sleep(0.1)\nprint('ERR:' + last_exc.__class__.__name__)\nsys.exit(1)",
                 );
 
                 let command = format!("python3 -c \"{script}\"");
-                let event = shell_event(call_id, &command, 5_000, sandbox_permissions)?;
+                let event =
+                    shell_event(call_id, &command, 10_000, sandbox_permissions, Some(false))?;
                 Ok((event, Some(command)))
             }
             ActionKind::RunCommand { command } => {
-                let event = shell_event(call_id, command, 1_000, sandbox_permissions)?;
+                let event = shell_event(call_id, command, 1_000, sandbox_permissions, None)?;
                 Ok((event, Some(command.to_string())))
             }
             ActionKind::RunUnifiedExecCommand {
@@ -158,7 +159,7 @@ impl ActionKind {
                 let _ = fs::remove_file(&path);
                 let patch = build_add_file_patch(&patch_path, content);
                 let command = shell_apply_patch_command(&patch);
-                let event = shell_event(call_id, &command, 5_000, sandbox_permissions)?;
+                let event = shell_event(call_id, &command, 5_000, sandbox_permissions, None)?;
                 Ok((event, Some(command)))
             }
         }
@@ -184,6 +185,7 @@ fn shell_event(
     command: &str,
     timeout_ms: u64,
     sandbox_permissions: SandboxPermissions,
+    login: Option<bool>,
 ) -> Result<Value> {
     let mut args = json!({
         "command": command,
@@ -191,6 +193,9 @@ fn shell_event(
     });
     if sandbox_permissions.requires_escalated_permissions() {
         args["sandbox_permissions"] = json!(sandbox_permissions);
+    }
+    if let Some(login) = login {
+        args["login"] = json!(login);
     }
     let args_str = serde_json::to_string(&args)?;
     Ok(ev_function_call(call_id, "shell_command", &args_str))

@@ -241,9 +241,13 @@ impl Codex {
         )
         .await;
 
-        let exec_policy = load_exec_policy_for_features(&config.features, &config.codex_home)
-            .await
-            .map_err(|err| CodexErr::Fatal(format!("failed to load execpolicy: {err}")))?;
+        let exec_policy = load_exec_policy_for_features(
+            &config.features,
+            &config.exec_policy,
+            &config.codex_home,
+        )
+        .await
+        .map_err(|err| CodexErr::Fatal(format!("failed to load execpolicy: {err}")))?;
         let exec_policy = Arc::new(RwLock::new(exec_policy));
 
         let config = Arc::new(config);

@@ -557,7 +557,7 @@ impl McpProcess {
                     anyhow::bail!("unexpected JSONRPCMessage::Error: {message:?}");
                 }
                 JSONRPCMessage::Response(_) => {
-                    anyhow::bail!("unexpected JSONRPCMessage::Response: {message:?}");
+                    // Responses can arrive before notifications; keep scanning.
                 }
             }
         }

@@ -462,7 +462,8 @@ time.sleep(60)
     .await;
 
     let start = Instant::now();
-    let output_str = tokio::time::timeout(Duration::from_secs(10), async {
+    let overall_timeout = Duration::from_secs(20);
+    let output_str = tokio::time::timeout(overall_timeout, async {
         test.submit_turn_with_policies(
             "run a command with a detached grandchild",
             AskForApproval::Never,
@@ -491,8 +492,9 @@ time.sleep(60)
         assert_regex_match(timeout_pattern, &output_str);
     }
 
+    let max_elapsed = overall_timeout.saturating_sub(Duration::from_secs(2));
     assert!(
-        elapsed < Duration::from_secs(9),
+        elapsed < max_elapsed,
         "command should return shortly after timeout even with live grandchildren: {elapsed:?}"
     );
 

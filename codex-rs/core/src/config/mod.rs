@@ -1,5 +1,7 @@
 use crate::auth::AuthCredentialsStoreMode;
 use crate::config::types::DEFAULT_OTEL_ENVIRONMENT;
+use crate::config::types::ExecPolicyConfig;
+use crate::config::types::ExecPolicyToml;
 use crate::config::types::History;
 use crate::config::types::McpServerConfig;
 use crate::config::types::Notice;
@@ -114,6 +116,9 @@ pub struct Config {
     pub approval_policy: Constrained<AskForApproval>,
 
     pub sandbox_policy: Constrained<SandboxPolicy>,
+
+    /// Execpolicy configuration derived from config.toml.
+    pub exec_policy: ExecPolicyConfig,
 
     /// True if the user passed in an override or set a value in config.toml
     /// for either of approval_policy or sandbox_mode.
@@ -643,6 +648,9 @@ pub struct ConfigToml {
     /// Sandbox configuration to apply if `sandbox` is `WorkspaceWrite`.
     pub sandbox_workspace_write: Option<SandboxWorkspaceWrite>,
 
+    /// Execpolicy configuration used to forbid command prefixes.
+    pub exec_policy: Option<ExecPolicyToml>,
+
     /// Optional external command to spawn for end-user notifications.
     #[serde(default)]
     pub notify: Option<Vec<String>>,
@@ -1159,6 +1167,7 @@ impl Config {
             .clone();
 
         let shell_environment_policy = cfg.shell_environment_policy.into();
+        let exec_policy = ExecPolicyConfig::from_toml(cfg.exec_policy);
 
         let history = cfg.history.unwrap_or_default();
 
@@ -1270,6 +1279,7 @@ impl Config {
             cwd: resolved_cwd,
             approval_policy: constrained_approval_policy,
             sandbox_policy: constrained_sandbox_policy,
+            exec_policy,
             did_user_set_custom_approval_policy_or_sandbox_mode,
             forced_auto_mode_downgraded_on_windows,
             shell_environment_policy,
@@ -3074,6 +3084,7 @@ model_verbosity = "high"
                 model_provider: fixture.openai_provider.clone(),
                 approval_policy: Constrained::allow_any(AskForApproval::Never),
                 sandbox_policy: Constrained::allow_any(SandboxPolicy::new_read_only_policy()),
+                exec_policy: ExecPolicyConfig::default(),
                 did_user_set_custom_approval_policy_or_sandbox_mode: true,
                 forced_auto_mode_downgraded_on_windows: false,
                 shell_environment_policy: ShellEnvironmentPolicy::default(),
@@ -3149,6 +3160,7 @@ model_verbosity = "high"
             model_provider: fixture.openai_chat_completions_provider.clone(),
             approval_policy: Constrained::allow_any(AskForApproval::UnlessTrusted),
             sandbox_policy: Constrained::allow_any(SandboxPolicy::new_read_only_policy()),
+            exec_policy: ExecPolicyConfig::default(),
             did_user_set_custom_approval_policy_or_sandbox_mode: true,
             forced_auto_mode_downgraded_on_windows: false,
             shell_environment_policy: ShellEnvironmentPolicy::default(),
@@ -3239,6 +3251,7 @@ model_verbosity = "high"
             model_provider: fixture.openai_provider.clone(),
             approval_policy: Constrained::allow_any(AskForApproval::OnFailure),
             sandbox_policy: Constrained::allow_any(SandboxPolicy::new_read_only_policy()),
+            exec_policy: ExecPolicyConfig::default(),
             did_user_set_custom_approval_policy_or_sandbox_mode: true,
             forced_auto_mode_downgraded_on_windows: false,
             shell_environment_policy: ShellEnvironmentPolicy::default(),
@@ -3315,6 +3328,7 @@ model_verbosity = "high"
             model_provider: fixture.openai_provider.clone(),
             approval_policy: Constrained::allow_any(AskForApproval::OnFailure),
             sandbox_policy: Constrained::allow_any(SandboxPolicy::new_read_only_policy()),
+            exec_policy: ExecPolicyConfig::default(),
             did_user_set_custom_approval_policy_or_sandbox_mode: true,
             forced_auto_mode_downgraded_on_windows: false,
             shell_environment_policy: ShellEnvironmentPolicy::default(),

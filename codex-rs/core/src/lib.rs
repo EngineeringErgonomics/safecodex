@@ -104,6 +104,7 @@ pub use command_safety::is_dangerous_command;
 pub use command_safety::is_safe_command;
 pub use exec_policy::ExecPolicyError;
 pub use exec_policy::load_exec_policy;
+pub use exec_policy::load_exec_policy_with_config;
 pub use safety::get_platform_sandbox;
 pub use safety::set_windows_sandbox_enabled;
 // Re-export the protocol types from the standalone `codex-protocol` crate so existing

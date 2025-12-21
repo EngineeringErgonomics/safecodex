@@ -28,9 +28,36 @@ pub use responses::create_final_assistant_message_sse_response;
 pub use responses::create_shell_command_sse_response;
 pub use rollout::create_fake_rollout;
 use serde::de::DeserializeOwned;
+use std::time::Duration;
+use std::time::Instant;
+use tokio::time::sleep;
+use wiremock::MockServer;
 
 pub fn to_response<T: DeserializeOwned>(response: JSONRPCResponse) -> anyhow::Result<T> {
     let value = serde_json::to_value(response.result)?;
     let codex_response = serde_json::from_value(value)?;
     Ok(codex_response)
+}
+
+pub async fn wait_for_chat_request(server: &MockServer, timeout: Duration) -> anyhow::Result<()> {
+    let deadline = Instant::now() + timeout;
+
+    loop {
+        let requests = server
+            .received_requests()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("mock server should not fail"))?;
+        if requests
+            .iter()
+            .any(|req| req.method == "POST" && req.url.path() == "/v1/chat/completions")
+        {
+            return Ok(());
+        }
+
+        if Instant::now() >= deadline {
+            anyhow::bail!("timed out waiting for /v1/chat/completions request");
+        }
+
+        sleep(Duration::from_millis(50)).await;
+    }
 }

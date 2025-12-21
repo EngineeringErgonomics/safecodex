@@ -49,7 +49,26 @@ impl OllamaClient {
     async fn try_from_provider_with_base_url(base_url: &str) -> io::Result<Self> {
         let provider =
             codex_core::create_oss_provider_with_base_url(base_url, codex_core::WireApi::Chat);
-        Self::try_from_provider(&provider).await
+        let base_url = provider
+            .base_url
+            .as_ref()
+            .expect("oss provider must have a base_url");
+        let uses_openai_compat = is_openai_compatible_base_url(base_url)
+            || matches!(provider.wire_api, WireApi::Chat)
+                && is_openai_compatible_base_url(base_url);
+        let host_root = base_url_to_host_root(base_url);
+        let client = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .no_proxy()
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        let client = Self {
+            client,
+            host_root,
+            uses_openai_compat,
+        };
+        client.probe_server().await?;
+        Ok(client)
     }
 
     /// Build a client from a provider definition and verify the server is reachable.
@@ -223,6 +242,7 @@ impl OllamaClient {
     fn from_host_root(host_root: impl Into<String>) -> Self {
         let client = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(5))
+            .no_proxy()
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
         Self {

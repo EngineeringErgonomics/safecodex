@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::command_safety::is_dangerous_command::requires_initial_appoval;
+use crate::config::types::ExecPolicyConfig;
 use codex_execpolicy::AmendError;
 use codex_execpolicy::Decision;
 use codex_execpolicy::Error as ExecPolicyRuleError;
@@ -60,6 +61,12 @@ pub enum ExecPolicyError {
         path: String,
         source: codex_execpolicy::Error,
     },
+
+    #[error("failed to apply execpolicy config rule {prefix:?}: {source}")]
+    InvalidConfigRule {
+        prefix: Vec<String>,
+        source: codex_execpolicy::Error,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -82,16 +89,24 @@ pub enum ExecPolicyUpdateError {
 
 pub(crate) async fn load_exec_policy_for_features(
     features: &Features,
+    exec_policy_config: &ExecPolicyConfig,
     codex_home: &Path,
 ) -> Result<Policy, ExecPolicyError> {
     if !features.enabled(Feature::ExecPolicy) {
         Ok(Policy::empty())
     } else {
-        load_exec_policy(codex_home).await
+        load_exec_policy_with_config(codex_home, exec_policy_config).await
     }
 }
 
 pub async fn load_exec_policy(codex_home: &Path) -> Result<Policy, ExecPolicyError> {
+    load_exec_policy_with_config(codex_home, &ExecPolicyConfig::default()).await
+}
+
+pub async fn load_exec_policy_with_config(
+    codex_home: &Path,
+    exec_policy_config: &ExecPolicyConfig,
+) -> Result<Policy, ExecPolicyError> {
     let policy_dir = codex_home.join(RULES_DIR_NAME);
     let policy_paths = collect_policy_files(&policy_dir).await?;
 
@@ -113,7 +128,8 @@ pub async fn load_exec_policy(codex_home: &Path) -> Result<Policy, ExecPolicyErr
             })?;
     }
 
-    let policy = parser.build();
+    let mut policy = parser.build();
+    apply_exec_policy_config(&mut policy, exec_policy_config)?;
     tracing::debug!(
         "loaded execpolicy from {} files in {}",
         policy_paths.len(),
@@ -121,6 +137,24 @@ pub async fn load_exec_policy(codex_home: &Path) -> Result<Policy, ExecPolicyErr
     );
 
     Ok(policy)
+}
+
+fn apply_exec_policy_config(
+    policy: &mut Policy,
+    exec_policy_config: &ExecPolicyConfig,
+) -> Result<(), ExecPolicyError> {
+    for prefix in &exec_policy_config.forbidden_prefixes {
+        if prefix.is_empty() {
+            continue;
+        }
+        policy
+            .add_prefix_rule(prefix, Decision::Forbidden)
+            .map_err(|source| ExecPolicyError::InvalidConfigRule {
+                prefix: prefix.clone(),
+                source,
+            })?;
+    }
+    Ok(())
 }
 
 pub(crate) fn default_policy_path(codex_home: &Path) -> PathBuf {
@@ -334,9 +368,10 @@ mod tests {
         features.disable(Feature::ExecPolicy);
         let temp_dir = tempdir().expect("create temp dir");
 
-        let policy = load_exec_policy_for_features(&features, temp_dir.path())
-            .await
-            .expect("policy result");
+        let policy =
+            load_exec_policy_for_features(&features, &ExecPolicyConfig::default(), temp_dir.path())
+                .await
+                .expect("policy result");
 
         let commands = [vec!["rm".to_string()]];
         assert_eq!(
@@ -384,6 +419,34 @@ mod tests {
                 decision: Decision::Forbidden,
                 matched_rules: vec![RuleMatch::PrefixRuleMatch {
                     matched_prefix: vec!["rm".to_string()],
+                    decision: Decision::Forbidden
+                }],
+            },
+            policy.check_multiple(command.iter(), &|_| Decision::Allow)
+        );
+    }
+
+    #[tokio::test]
+    async fn config_forbidden_prefixes_are_applied() {
+        let temp_dir = tempdir().expect("create temp dir");
+        let exec_policy_config = ExecPolicyConfig {
+            forbidden_prefixes: vec![vec!["rm".to_string(), "-rf".to_string()]],
+        };
+
+        let policy = load_exec_policy_with_config(temp_dir.path(), &exec_policy_config)
+            .await
+            .expect("policy result");
+        let command = [vec![
+            "rm".to_string(),
+            "-rf".to_string(),
+            "/tmp".to_string(),
+        ]];
+
+        assert_eq!(
+            Evaluation {
+                decision: Decision::Forbidden,
+                matched_rules: vec![RuleMatch::PrefixRuleMatch {
+                    matched_prefix: vec!["rm".to_string(), "-rf".to_string()],
                     decision: Decision::Forbidden
                 }],
             },

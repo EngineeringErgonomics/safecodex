@@ -5,6 +5,7 @@ use app_test_support::McpProcess;
 use app_test_support::create_mock_chat_completions_server;
 use app_test_support::create_shell_command_sse_response;
 use app_test_support::to_response;
+use app_test_support::wait_for_chat_request;
 use codex_app_server_protocol::JSONRPCNotification;
 use codex_app_server_protocol::JSONRPCResponse;
 use codex_app_server_protocol::RequestId;
@@ -84,6 +85,8 @@ async fn turn_interrupt_aborts_running_turn() -> Result<()> {
     )
     .await??;
     let TurnStartResponse { turn } = to_response::<TurnStartResponse>(turn_resp)?;
+
+    wait_for_chat_request(&server, DEFAULT_READ_TIMEOUT).await?;
 
     // Give the command a brief moment to start.
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;

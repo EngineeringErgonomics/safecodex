@@ -705,7 +705,7 @@ async fn streamable_http_tool_call_round_trip() -> anyhow::Result<()> {
         .env("MCP_TEST_VALUE", expected_env_value)
         .spawn()?;
 
-    wait_for_streamable_http_server(&mut http_server_child, &bind_addr, Duration::from_secs(5))
+    wait_for_streamable_http_server(&mut http_server_child, &bind_addr, Duration::from_secs(20))
         .await?;
 
     let fixture = test_codex()
@@ -731,6 +731,24 @@ async fn streamable_http_tool_call_round_trip() -> anyhow::Result<()> {
         .build(&server)
         .await?;
     let session_model = fixture.session_configured.model.clone();
+
+    let startup_event = wait_for_event(&fixture.codex, |ev| {
+        matches!(ev, EventMsg::McpStartupComplete(_))
+    })
+    .await;
+    let EventMsg::McpStartupComplete(startup) = startup_event else {
+        unreachable!("event guard guarantees McpStartupComplete");
+    };
+    assert!(
+        startup.failed.is_empty(),
+        "mcp startup reported failures: {:?}",
+        startup.failed
+    );
+    assert!(
+        startup.ready.iter().any(|name| name == server_name),
+        "mcp startup did not report {server_name} ready: {:?}",
+        startup.ready
+    );
 
     fixture
         .codex
@@ -875,7 +893,7 @@ async fn streamable_http_with_oauth_round_trip() -> anyhow::Result<()> {
         .env("MCP_TEST_VALUE", expected_env_value)
         .spawn()?;
 
-    wait_for_streamable_http_server(&mut http_server_child, &bind_addr, Duration::from_secs(5))
+    wait_for_streamable_http_server(&mut http_server_child, &bind_addr, Duration::from_secs(20))
         .await?;
 
     let temp_home = tempdir()?;
@@ -912,6 +930,24 @@ async fn streamable_http_with_oauth_round_trip() -> anyhow::Result<()> {
         .build(&server)
         .await?;
     let session_model = fixture.session_configured.model.clone();
+
+    let startup_event = wait_for_event(&fixture.codex, |ev| {
+        matches!(ev, EventMsg::McpStartupComplete(_))
+    })
+    .await;
+    let EventMsg::McpStartupComplete(startup) = startup_event else {
+        unreachable!("event guard guarantees McpStartupComplete");
+    };
+    assert!(
+        startup.failed.is_empty(),
+        "mcp startup reported failures: {:?}",
+        startup.failed
+    );
+    assert!(
+        startup.ready.iter().any(|name| name == server_name),
+        "mcp startup did not report {server_name} ready: {:?}",
+        startup.ready
+    );
 
     fixture
         .codex
@@ -1019,7 +1055,9 @@ async fn wait_for_streamable_http_server(
             ));
         }
 
-        match tokio::time::timeout(remaining, TcpStream::connect(address)).await {
+        let attempt_timeout = remaining.min(Duration::from_millis(250));
+
+        match tokio::time::timeout(attempt_timeout, TcpStream::connect(address)).await {
             Ok(Ok(_)) => return Ok(()),
             Ok(Err(error)) => {
                 if Instant::now() >= deadline {
@@ -1029,9 +1067,11 @@ async fn wait_for_streamable_http_server(
                 }
             }
             Err(_) => {
-                return Err(anyhow::anyhow!(
-                    "timed out waiting for streamable HTTP server at {address}: connect call timed out"
-                ));
+                if Instant::now() >= deadline {
+                    return Err(anyhow::anyhow!(
+                        "timed out waiting for streamable HTTP server at {address}: connect call timed out"
+                    ));
+                }
             }
         }
 

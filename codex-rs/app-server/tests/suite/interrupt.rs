@@ -21,6 +21,7 @@ use app_test_support::McpProcess;
 use app_test_support::create_mock_chat_completions_server;
 use app_test_support::create_shell_command_sse_response;
 use app_test_support::to_response;
+use app_test_support::wait_for_chat_request;
 
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
@@ -114,6 +115,8 @@ async fn shell_command_interruption() -> anyhow::Result<()> {
     )
     .await??;
     let SendUserMessageResponse {} = to_response::<SendUserMessageResponse>(send_user_resp)?;
+
+    wait_for_chat_request(&server, DEFAULT_READ_TIMEOUT).await?;
 
     // Give the command a moment to start
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;

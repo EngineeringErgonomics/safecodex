@@ -992,7 +992,23 @@ async fn unified_exec_terminal_interaction_captures_delayed_output() -> Result<(
 
     // Consume all events for this turn so we can assert on each stage.
     loop {
-        let msg = wait_for_event(&codex, |_| true).await;
+        let msg = if task_completed && end_event.is_some() {
+            if terminal_events.len() >= 3 {
+                break;
+            }
+            match tokio::time::timeout(Duration::from_secs(2), codex.next_event()).await {
+                Ok(Ok(event)) => Some(event.msg),
+                Ok(Err(err)) => panic!("stream ended unexpectedly: {err:?}"),
+                Err(_) => None,
+            }
+        } else {
+            Some(wait_for_event(&codex, |_| true).await)
+        };
+
+        let Some(msg) = msg else {
+            break;
+        };
+
         match msg {
             EventMsg::ExecCommandBegin(ev) if ev.call_id == open_call_id => {
                 begin_event = Some(ev);
@@ -1011,9 +1027,6 @@ async fn unified_exec_terminal_interaction_captures_delayed_output() -> Result<(
             }
             _ => {}
         };
-        if task_completed && end_event.is_some() {
-            break;
-        }
     }
 
     let begin_event = begin_event.expect("expected ExecCommandBegin event");

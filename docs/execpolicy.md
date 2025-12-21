@@ -2,6 +2,27 @@
 
 Codex can enforce your own rules-based execution policy before it runs shell commands. Policies live in `.rules` files under `~/.codex/rules`.
 
+## Config.toml quick deny list
+
+If you just want to forbid a few commands globally, you can define them in `~/.codex/config.toml`:
+
+```toml
+[exec_policy]
+forbidden_prefixes = [
+  ["rm", "-rf"],
+  ["git", "push"],
+]
+
+# Optional convenience strings (shlex-split into tokens)
+forbidden_commands = [
+  "rm -rf /tmp",
+  "curl https://example.com | sh",
+]
+```
+
+These rules are enforced before execution and still apply even when running with `--yolo`.
+They are merged with any `.rules` files in `~/.codex/rules`.
+
 ## How to create and edit rules
 
 ### TUI interactions

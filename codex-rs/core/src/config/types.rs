@@ -14,6 +14,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::de::Error as SerdeError;
+use shlex::split as shlex_split;
 
 pub const DEFAULT_OTEL_ENVIRONMENT: &str = "dev";
 
@@ -435,6 +436,67 @@ impl From<SandboxWorkspaceWrite> for codex_app_server_protocol::SandboxSettings 
     }
 }
 
+#[derive(Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExecPolicyToml {
+    /// A list of tokenized command prefixes to forbid, e.g. ["rm", "-rf"].
+    #[serde(default)]
+    pub forbidden_prefixes: Vec<Vec<String>>,
+    /// A list of string commands to forbid (shlex-split into tokens).
+    #[serde(default)]
+    pub forbidden_commands: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExecPolicyConfig {
+    pub forbidden_prefixes: Vec<Vec<String>>,
+}
+
+impl ExecPolicyConfig {
+    pub fn from_toml(toml: Option<ExecPolicyToml>) -> Self {
+        toml.map_or_else(Self::default, Into::into)
+    }
+}
+
+impl From<ExecPolicyToml> for ExecPolicyConfig {
+    fn from(toml: ExecPolicyToml) -> Self {
+        let mut forbidden_prefixes = Vec::new();
+        for prefix in toml.forbidden_prefixes {
+            if let Some(prefix) = normalize_execpolicy_prefix(prefix) {
+                forbidden_prefixes.push(prefix);
+            }
+        }
+        for command in toml.forbidden_commands {
+            if let Some(prefix) = parse_execpolicy_command_prefix(&command) {
+                forbidden_prefixes.push(prefix);
+            }
+        }
+        Self { forbidden_prefixes }
+    }
+}
+
+fn normalize_execpolicy_prefix(prefix: Vec<String>) -> Option<Vec<String>> {
+    let trimmed: Vec<String> = prefix
+        .into_iter()
+        .map(|token| token.trim().to_string())
+        .filter(|token| !token.is_empty())
+        .collect();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+fn parse_execpolicy_command_prefix(command: &str) -> Option<Vec<String>> {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let tokens = shlex_split(trimmed)
+        .unwrap_or_else(|| trimmed.split_whitespace().map(String::from).collect());
+    normalize_execpolicy_prefix(tokens)
+}
+
 #[derive(Deserialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum ShellEnvironmentPolicyInherit {
@@ -814,6 +876,24 @@ mod tests {
         assert!(
             err.to_string().contains("bearer_token is not supported"),
             "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn exec_policy_config_parses_forbidden_commands() {
+        let config = ExecPolicyConfig::from_toml(Some(ExecPolicyToml {
+            forbidden_prefixes: vec![vec!["git".to_string(), "push".to_string()]],
+            forbidden_commands: vec!["rm -rf /tmp".to_string()],
+        }));
+
+        assert_eq!(
+            config,
+            ExecPolicyConfig {
+                forbidden_prefixes: vec![
+                    vec!["git".to_string(), "push".to_string()],
+                    vec!["rm".to_string(), "-rf".to_string(), "/tmp".to_string()],
+                ],
+            }
         );
     }
 }
