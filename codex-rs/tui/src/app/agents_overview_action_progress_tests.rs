@@ -36,7 +36,7 @@ async fn modal_consumes_input_and_finishes_after_input_closes() -> color_eyre::R
         Duration::from_secs(5),
         run_lifecycle_modal(
             &mut tui,
-            AgentsOverviewAction::Archive,
+            LifecycleProgress(AgentsOverviewAction::Archive),
             async {
                 wait_for_input.await.expect("all modal input was consumed");
                 tokio::task::yield_now().await;

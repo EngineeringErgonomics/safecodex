@@ -73,11 +73,10 @@ impl Renderable for LifecycleProgress {
 /// Keep the terminal responsive without dispatching navigation or queued task events.
 async fn run_lifecycle_modal<T>(
     tui: &mut tui::Tui,
-    action: AgentsOverviewAction,
+    progress: impl Renderable,
     operation: impl Future<Output = T>,
     events: impl Stream<Item = tui::TuiEvent> + Unpin,
 ) -> color_eyre::Result<T> {
-    let progress = LifecycleProgress(action);
     tui.draw(u16::MAX, |frame| {
         progress.render(frame.area(), frame.buffer_mut());
     })?;
@@ -102,6 +101,69 @@ async fn run_lifecycle_modal<T>(
     };
     tui.frame_requester().schedule_frame();
     Ok(result)
+}
+
+struct LifecycleOutcome {
+    result: color_eyre::Result<()>,
+    attempted: bool,
+    removes_primary: bool,
+    detach_primary: bool,
+}
+
+async fn perform_lifecycle_action(
+    app_server: &mut AppServerSession,
+    primary_thread_id: Option<ThreadId>,
+    thread_id: ThreadId,
+    action: AgentsOverviewAction,
+) -> LifecycleOutcome {
+    // The overview may lack intermediate ancestors, or even the primary's metadata.
+    let mut removes_primary = primary_thread_id == Some(thread_id);
+    let mut attempted = false;
+    let result = async {
+        if let Some(primary) = primary_thread_id
+            && primary != thread_id
+        {
+            removes_primary = app_server
+                .thread_read(primary, /*include_turns*/ false)
+                .await?
+                .session_id
+                == thread_id.to_string();
+        }
+        attempted = true;
+        match action {
+            AgentsOverviewAction::Archive => app_server.thread_archive(thread_id).await,
+            AgentsOverviewAction::Delete => app_server.thread_delete(thread_id).await,
+        }
+    }
+    .await;
+    let mut detach_primary = removes_primary && attempted;
+    if detach_primary
+        && result.is_err()
+        && let Some(primary) = primary_thread_id
+    {
+        // A rejected operation may have left the attachment alive. Ask the server directly.
+        let mut cursor = None;
+        while let Ok(page) = app_server
+            .thread_loaded_list(ThreadLoadedListParams {
+                cursor,
+                limit: None,
+            })
+            .await
+        {
+            if page.data.contains(&primary.to_string()) {
+                detach_primary = false;
+                break;
+            }
+            let Some(next) = page.next_cursor else { break };
+            cursor = Some(next);
+        }
+    }
+    LifecycleOutcome {
+        result,
+        attempted,
+        removes_primary,
+        detach_primary,
+    }
 }
 
 impl App {
@@ -172,55 +234,55 @@ impl App {
         if self.windows_sandbox_blocks_thread_switch() {
             return Ok(());
         }
-        // The overview may lack intermediate ancestors, or even the primary's metadata.
-        let mut removes_primary = self.primary_thread_id == Some(thread_id);
-        let mut attempted = false;
-        let primary_thread_id = self.primary_thread_id;
         let events = tui.event_stream();
-        let operation = async {
-            let result = async {
-                if let Some(primary) = primary_thread_id
-                    && primary != thread_id
-                {
-                    removes_primary = app_server
-                        .thread_read(primary, /*include_turns*/ false)
-                        .await?
-                        .session_id
-                        == thread_id.to_string();
-                }
-                attempted = true;
-                match action {
-                    AgentsOverviewAction::Archive => app_server.thread_archive(thread_id).await,
-                    AgentsOverviewAction::Delete => app_server.thread_delete(thread_id).await,
-                }
+        let outcome = run_lifecycle_modal(
+            tui,
+            LifecycleProgress(action),
+            perform_lifecycle_action(app_server, self.primary_thread_id, thread_id, action),
+            events,
+        )
+        .await?;
+        self.apply_agents_overview_outcome(thread_id, &outcome);
+        self.finish_agents_overview_action(
+            tui,
+            app_server,
+            outcome.attempted,
+            outcome.detach_primary,
+        )?;
+        let LifecycleOutcome {
+            result, attempted, ..
+        } = outcome;
+        if let Err(error) = result {
+            let verb = match action {
+                AgentsOverviewAction::Archive => "archive",
+                AgentsOverviewAction::Delete => "delete",
+            };
+            let mut header = vec![
+                format!("Could not {verb} task").red().bold().into(),
+                format!("{error:#}").red().into(),
+            ];
+            if attempted {
+                header.push(
+                    "Work may have stopped. Resume the task to continue, or retry the action."
+                        .dim()
+                        .into(),
+                );
             }
-            .await;
-            let mut detach_primary = removes_primary && attempted;
-            if detach_primary
-                && result.is_err()
-                && let Some(primary) = primary_thread_id
-            {
-                // A rejected operation may have left the attachment alive. Ask the server directly.
-                let mut cursor = None;
-                while let Ok(page) = app_server
-                    .thread_loaded_list(ThreadLoadedListParams {
-                        cursor,
-                        limit: None,
-                    })
-                    .await
-                {
-                    if page.data.contains(&primary.to_string()) {
-                        detach_primary = false;
-                        break;
-                    }
-                    let Some(next) = page.next_cursor else { break };
-                    cursor = Some(next);
-                }
-            }
-            (result, detach_primary)
-        };
-        let (result, detach_primary) = run_lifecycle_modal(tui, action, operation, events).await?;
-        if attempted {
+            self.chat_widget.show_selection_view(SelectionViewParams {
+                header: Box::new(LifecycleHeader(header)),
+                items: vec![SelectionItem {
+                    name: "Back to agents".to_string(),
+                    dismiss_on_select: true,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            });
+        }
+
+        Ok(())
+    }
+    fn apply_agents_overview_outcome(&mut self, thread_id: ThreadId, outcome: &LifecycleOutcome) {
+        if outcome.attempted {
             // A read started before the RPC can contain stale task and approval state.
             if let Some(refresh) = self.agents_overview.refresh_task.take() {
                 refresh.abort();
@@ -229,7 +291,7 @@ impl App {
             self.agents_overview.refresh_pending = false;
             self.agents_overview.refresh_notifications.clear();
         }
-        if result.is_ok() {
+        if outcome.result.is_ok() {
             // Invalidate cached details for the displayed group, without inferring child outcomes.
             let mut removed = HashSet::from([thread_id]);
             loop {
@@ -258,7 +320,7 @@ impl App {
                 }
             }
             if let Some(primary) = self.primary_thread_id
-                && removes_primary
+                && outcome.removes_primary
             {
                 removed.insert(primary);
             }
@@ -272,6 +334,15 @@ impl App {
                 self.agents_overview.dispatched_requests.remove(&removed_id);
             }
         }
+    }
+
+    fn finish_agents_overview_action(
+        &mut self,
+        tui: &mut tui::Tui,
+        app_server: &AppServerSession,
+        attempted: bool,
+        detach_primary: bool,
+    ) -> color_eyre::Result<()> {
         if detach_primary {
             self.reset_for_thread_switch(tui)?;
             self.pending_thread_switch_resets += 1;
@@ -291,33 +362,6 @@ impl App {
                 self.refresh_agents_overview_threads(app_server);
             }
         }
-        if let Err(error) = result {
-            let verb = match action {
-                AgentsOverviewAction::Archive => "archive",
-                AgentsOverviewAction::Delete => "delete",
-            };
-            let mut header = vec![
-                format!("Could not {verb} task").red().bold().into(),
-                format!("{error:#}").red().into(),
-            ];
-            if attempted {
-                header.push(
-                    "Work may have stopped. Resume the task to continue, or retry the action."
-                        .dim()
-                        .into(),
-                );
-            }
-            self.chat_widget.show_selection_view(SelectionViewParams {
-                header: Box::new(LifecycleHeader(header)),
-                items: vec![SelectionItem {
-                    name: "Back to agents".to_string(),
-                    dismiss_on_select: true,
-                    ..Default::default()
-                }],
-                ..Default::default()
-            });
-        }
-
         Ok(())
     }
 }
