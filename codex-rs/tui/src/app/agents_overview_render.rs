@@ -20,6 +20,7 @@ impl AgentsOverviewView {
                     binding.parts().0,
                     binding.parts().1,
                 )) || [
+                    &self.agents_keymap.select_mode,
                     &self.agents_keymap.resume,
                     &self.agents_keymap.search,
                     &self.agents_keymap.new_task,
@@ -49,7 +50,7 @@ impl AgentsOverviewView {
                 " "
             },
         );
-        let mut hints: Vec<Line<'static>> = Vec::new();
+        let mut hints: Vec<Line<'static>> = self.selection_hints();
         if !navigation_hint.is_empty() {
             hints.push(vec![navigation_hint.bold(), " navigate".dim()].into());
         }
@@ -126,7 +127,17 @@ impl AgentsOverviewView {
                 self.selected_row().is_some(),
             );
         }
-        add_hint(list_hint(ListAction::Cancel), "back", true);
+        let cancel_label = {
+            let state = self.state();
+            if !state.editing_metadata()
+                && matches!(state.selection, AgentsOverviewSelection::Active(_))
+            {
+                "clear selection"
+            } else {
+                "back"
+            }
+        };
+        add_hint(list_hint(ListAction::Cancel), cancel_label, true);
         let separator = if hints.iter().map(Line::width).sum::<usize>()
             + hints.len().saturating_sub(1) * 2
             <= usize::from(width)

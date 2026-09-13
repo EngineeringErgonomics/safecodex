@@ -433,6 +433,8 @@ pub struct TuiListKeymap {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct TuiAgentsKeymap {
+    /// Enter or leave selection mode for deleting multiple tasks.
+    pub select_mode: Option<KeybindingsSpec>,
     /// Open the session resume picker.
     pub resume: Option<KeybindingsSpec>,
     /// Search the available agent tasks.
@@ -635,6 +637,7 @@ fn normalize_key_name(key: &str, original: &str) -> Result<String, String> {
         "pgup" | "pageup" => "page-up",
         "pgdn" | "pagedown" => "page-down",
         "del" => "delete",
+        "ins" => "insert",
         other => other,
     };
 
@@ -652,6 +655,7 @@ fn normalize_key_name(key: &str, original: &str) -> Result<String, String> {
             | "backspace"
             | "esc"
             | "delete"
+            | "insert"
             | "up"
             | "down"
             | "left"
@@ -676,7 +680,7 @@ fn normalize_key_name(key: &str, original: &str) -> Result<String, String> {
     Err(format!(
         "unknown key `{key}` in keybinding `{original}`. \
 Use a printable character (for example `a`), function keys (`f1`-`f{MAX_FUNCTION_KEY}`), \
-or one of: enter, tab, backspace, esc, delete, arrows, home/end, page-up/page-down, space, minus.\n\
+or one of: enter, tab, backspace, esc, delete, insert, arrows, home/end, page-up/page-down, space, minus.\n\
 See the Codex keymap documentation for supported actions and examples."
     ))
 }
@@ -685,6 +689,18 @@ See the Codex keymap documentation for supported actions and examples."
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn selection_mode_accepts_insert_and_its_alias() {
+        for key in ["insert", "INS"] {
+            let input = format!("[agents]\nselect_mode = {key:?}");
+            let keymap: TuiKeymap = toml::from_str(&input).unwrap();
+            assert_eq!(
+                keymap.agents.select_mode,
+                Some(KeybindingsSpec::One(KeybindingSpec("insert".to_string())))
+            );
+        }
+    }
 
     #[test]
     fn misplaced_action_at_keymap_root_is_rejected() {

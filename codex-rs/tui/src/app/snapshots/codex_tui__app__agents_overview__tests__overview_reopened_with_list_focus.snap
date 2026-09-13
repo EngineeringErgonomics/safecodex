@@ -19,10 +19,10 @@ expression: "render_bottom_popup(&app.chat_widget,\n96).replace(&format!(\"{proj
                                                       │
                                                       │
                                                       │
-                                                      │
   New task
 
 › Unsent draft
 
-  ↑↓ navigate ctrl+o resume → open ctrl+n new task ctrl+f search ctrl+s group: project
-  ctrl+r rename ctrl+x stop ctrl+w hide ctrl+e archive del delete esc back
+  insert select tasks ↑↓ navigate ctrl+o resume → open ctrl+n new task ctrl+f search
+  ctrl+s group: project ctrl+r rename ctrl+x stop ctrl+w hide ctrl+e archive del delete
+  esc back

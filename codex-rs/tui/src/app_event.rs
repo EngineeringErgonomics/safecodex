@@ -332,6 +332,12 @@ pub(crate) enum AppEvent {
         thread_id: ThreadId,
         action: AgentsOverviewAction,
     },
+    ConfirmAgentsOverviewDelete {
+        thread_ids: Vec<ThreadId>,
+    },
+    RunAgentsOverviewDelete {
+        targets: Vec<(ThreadId, String)>,
+    },
     /// Execute a confirmed dashboard lifecycle action.
     RunAgentsOverviewAction {
         thread_id: ThreadId,

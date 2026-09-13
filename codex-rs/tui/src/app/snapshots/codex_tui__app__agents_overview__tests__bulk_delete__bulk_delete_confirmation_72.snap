@@ -1,0 +1,14 @@
+---
+source: tui/src/app/agents_overview_bulk_delete_tests.rs
+expression: "render_bottom_popup(&app.chat_widget, width)"
+---
+  Permanently delete 2 tasks?
+  This stops any running work in these tasks and their child agents,
+  then permanently deletes their history. This cannot be undone.
+  • Second
+  • First
+
+› 1. Cancel
+  2. Permanently delete selected tasks and child agents
+
+  Press enter to confirm or esc to go back

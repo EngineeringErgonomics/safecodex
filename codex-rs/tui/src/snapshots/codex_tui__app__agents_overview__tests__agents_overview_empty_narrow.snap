@@ -21,8 +21,8 @@ expression: rendered
 
 › Describe a new task
 
-  ↑↓ navigate ctrl+o resume → open
-  ctrl+n new task ctrl+f search
-  ctrl+s group: project ctrl+r rename
-  ctrl+x stop ctrl+w hide ctrl+e archive
-  del delete esc back
+  insert select tasks ↑↓ navigate
+  ctrl+o resume → open ctrl+n new task
+  ctrl+f search ctrl+s group: project
+  ctrl+r rename ctrl+x stop ctrl+w hide
+  ctrl+e archive del delete esc back

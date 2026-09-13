@@ -406,6 +406,7 @@ impl ListKeymap {
 /// Task-management shortcuts specific to the shared agents dashboard.
 #[derive(Clone, Debug)]
 pub(crate) struct AgentsKeymap {
+    pub(crate) select_mode: Vec<KeyBinding>,
     pub(crate) resume: Vec<KeyBinding>,
     pub(crate) search: Vec<KeyBinding>,
     pub(crate) new_task: Vec<KeyBinding>,
@@ -1283,6 +1284,7 @@ impl RuntimeKeymap {
                             == key_hint::ctrl(KeyCode::Char('o')).parts()
                 }));
         let mut agents = AgentsKeymap {
+            select_mode: resolve_local!(keymap, defaults, agents, select_mode),
             resume: if resume_default_is_shadowed {
                 Vec::new()
             } else {
@@ -1307,6 +1309,11 @@ impl RuntimeKeymap {
                 "ctrl-e",
             ),
             (keymap.agents.delete.as_ref(), &mut agents.delete, "delete"),
+            (
+                keymap.agents.select_mode.as_ref(),
+                &mut agents.select_mode,
+                "insert",
+            ),
             (keymap.agents.hide.as_ref(), &mut agents.hide, "ctrl-w"),
         ] {
             if configured.is_none()
@@ -1450,6 +1457,7 @@ impl RuntimeKeymap {
 
         for (configured, bindings) in [
             (keymap.agents.resume.as_ref(), &mut agents.resume),
+            (keymap.agents.select_mode.as_ref(), &mut agents.select_mode),
             (keymap.agents.search.as_ref(), &mut agents.search),
             (keymap.agents.new_task.as_ref(), &mut agents.new_task),
             (keymap.agents.rename.as_ref(), &mut agents.rename),
@@ -1816,6 +1824,7 @@ impl RuntimeKeymap {
                 chord_hints: Arc::default(),
             },
             agents: AgentsKeymap {
+                select_mode: default_bindings![plain(KeyCode::Insert)],
                 resume: default_bindings![ctrl(KeyCode::Char('o'))],
                 search: default_bindings![ctrl(KeyCode::Char('f'))],
                 new_task: default_bindings![ctrl(KeyCode::Char('n'))],
@@ -2560,6 +2569,7 @@ fn parse_keybinding(spec: &str) -> Option<KeyBinding> {
         "backspace" => KeyCode::Backspace,
         "esc" => KeyCode::Esc,
         "delete" => KeyCode::Delete,
+        "insert" => KeyCode::Insert,
         "up" => KeyCode::Up,
         "down" => KeyCode::Down,
         "left" => KeyCode::Left,
@@ -3777,6 +3787,7 @@ mod tests {
             ("backspace", KeyCode::Backspace),
             ("esc", KeyCode::Esc),
             ("delete", KeyCode::Delete),
+            ("insert", KeyCode::Insert),
             ("up", KeyCode::Up),
             ("down", KeyCode::Down),
             ("left", KeyCode::Left),

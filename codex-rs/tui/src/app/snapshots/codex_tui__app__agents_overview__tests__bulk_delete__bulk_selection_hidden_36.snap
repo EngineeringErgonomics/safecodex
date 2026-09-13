@@ -1,0 +1,28 @@
+---
+source: tui/src/app/agents_overview_bulk_delete_tests.rs
+expression: "render_bottom_popup(&app.chat_widget, width)"
+---
+  Agent command center
+  0 need input   0 working   2 rea
+  ────────────────────────────────
+  /tmp/project  2
+  › [ ] ○ Beta  Ready
+
+
+
+
+
+
+
+
+  Search › Beta
+  1 selected · 1 hidden · show
+  hidden selections or clear
+  before deleting
+  ↑↓ navigate ctrl+o resume
+  enter open ctrl+n new task
+  ctrl+f search
+  ctrl+s group: project
+  ctrl+r rename ctrl+x stop
+  ctrl+w hide ctrl+e archive
+  del delete esc back
