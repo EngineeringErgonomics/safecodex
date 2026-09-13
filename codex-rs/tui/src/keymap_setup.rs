@@ -654,6 +654,7 @@ fn key_parts_to_config_key_spec(
         KeyCode::Backspace => "backspace".to_string(),
         KeyCode::Esc => "esc".to_string(),
         KeyCode::Delete => "delete".to_string(),
+        KeyCode::Insert => "insert".to_string(),
         KeyCode::Up => "up".to_string(),
         KeyCode::Down => "down".to_string(),
         KeyCode::Left => "left".to_string(),
@@ -1731,6 +1732,10 @@ mod tests {
 
     #[test]
     fn key_capture_serializes_special_keys() {
+        assert_eq!(
+            key_event_to_config_key_spec(KeyEvent::from(KeyCode::Insert)),
+            Ok("insert".to_string())
+        );
         assert_eq!(
             key_event_to_config_key_spec(KeyEvent::new(KeyCode::PageDown, KeyModifiers::SHIFT)),
             Ok("shift-page-down".to_string())

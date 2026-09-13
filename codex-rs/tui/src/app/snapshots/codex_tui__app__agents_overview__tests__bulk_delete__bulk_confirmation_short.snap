@@ -1,0 +1,16 @@
+---
+source: tui/src/app/agents_overview_bulk_delete_tests.rs
+expression: terminal.backend()
+---
+"                                    "
+"                                    "
+"  Permanently delete 25 tasks?      "
+"  This stops any running work in    "
+"  these tasks and their child       "
+"  [… 81 lines] ctrl + a view all    "
+"                                    "
+"› 1. Cancel                         "
+"  2. Permanently delete selected    "
+"     tasks and child agents         "
+"                                    "
+"  Press enter to confirm or esc to g"

@@ -7,6 +7,9 @@ mod grouping;
 mod input;
 #[path = "agents_overview_render.rs"]
 mod render;
+#[path = "agents_overview_selection.rs"]
+mod selection;
+pub(super) use selection::AgentsOverviewSelection;
 
 pub(super) use grouping::AgentsOverviewGrouping;
 use grouping::model_name;
@@ -133,6 +136,7 @@ impl AgentsOverviewProjectGroup {
 
 #[derive(Default)]
 pub(super) struct AgentsOverviewViewState {
+    pub(super) selection: AgentsOverviewSelection,
     // Search and rename never borrow the new-task draft.
     pub(super) input: String,
     pub(super) composer: Option<ChatComposer>,
@@ -442,6 +446,7 @@ impl AgentsOverviewView {
             let mut spans = vec![
                 marker,
                 " ".into(),
+                self.selection_marker(row.thread_id),
                 dot,
                 " ".into(),
                 Span::styled(display_title(&row.thread), self.title_style(row.thread_id)),
@@ -634,6 +639,9 @@ impl BottomPaneView for AgentsOverviewView {
         }
         if self.state().composing() {
             self.handle_composer_key(key);
+            return;
+        }
+        if self.handle_selection_key(key) {
             return;
         }
         if key.code == KeyCode::Backspace

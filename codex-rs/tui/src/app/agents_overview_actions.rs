@@ -2,6 +2,9 @@
 //! A modal keeps rendering during RPCs while deferring navigation and task notifications.
 //! Removing the current root leaves an unattached dashboard, even when it is empty.
 
+#[path = "agents_overview_bulk_delete.rs"]
+mod bulk_delete;
+
 use super::App;
 use super::agents_overview_view::AgentsOverviewFocus;
 use crate::app_event::AgentsOverviewAction;
@@ -325,6 +328,9 @@ impl App {
                 removed.insert(primary);
             }
             for removed_id in removed {
+                if let Ok(mut state) = self.agents_overview.view_state.lock() {
+                    state.selection.remove(&removed_id);
+                }
                 self.agents_overview.threads.remove(&removed_id);
                 self.agents_overview.activity.remove(&removed_id);
                 self.agents_overview.last_messages.remove(&removed_id);

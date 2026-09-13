@@ -2998,3 +2998,6 @@ fn trust_fixture_folders(app: &mut App) {
 
 #[path = "agents_overview_usage_tests.rs"]
 mod usage;
+
+#[path = "agents_overview_bulk_delete_tests.rs"]
+mod bulk_delete;

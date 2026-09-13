@@ -393,6 +393,7 @@ define_runtime_action_bindings! {
         cancel,
     ],
     "agents" => Agents, agents, agents [
+        select_mode,
         resume,
         search,
         new_task,

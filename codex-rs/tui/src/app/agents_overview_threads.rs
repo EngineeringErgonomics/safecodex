@@ -67,6 +67,9 @@ impl App {
                 self.agents_overview.threads.insert(thread_id, Some(thread));
             }
             ServerNotification::ThreadArchived(_) | ServerNotification::ThreadDeleted(_) => {
+                if let Ok(mut state) = self.agents_overview.view_state.lock() {
+                    state.selection.remove(&thread_id);
+                }
                 self.agents_overview.activity.remove(&thread_id);
                 self.agents_overview.last_messages.remove(&thread_id);
                 self.agents_overview.usage.remove(&thread_id);

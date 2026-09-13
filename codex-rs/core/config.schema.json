@@ -4093,6 +4093,7 @@
               "rename": null,
               "resume": null,
               "search": null,
+              "select_mode": null,
               "stop": null,
               "toggle_grouping": null
             },
@@ -4454,6 +4455,14 @@
             }
           ],
           "description": "Search the available agent tasks."
+        },
+        "select_mode": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Enter or leave selection mode for deleting multiple tasks."
         },
         "stop": {
           "allOf": [
@@ -4935,6 +4944,7 @@
             "rename": null,
             "resume": null,
             "search": null,
+            "select_mode": null,
             "stop": null,
             "toggle_grouping": null
           }

@@ -2553,6 +2553,12 @@ impl App {
                 self.agents_overview.hidden_threads.insert(thread_id);
                 self.repaint_agents_overview();
             }
+            AppEvent::ConfirmAgentsOverviewDelete { thread_ids } => {
+                self.confirm_agents_overview_delete(thread_ids);
+            }
+            AppEvent::RunAgentsOverviewDelete { targets } => {
+                self.run_agents_overview_delete(tui, app_server, targets).await?;
+            }
             AppEvent::ConfirmAgentsOverviewAction { thread_id, action } => {
                 self.confirm_agents_overview_action(thread_id, action);
             }
